@@ -77,3 +77,136 @@ def label(parent, text, **kw):
 
 def separator(parent):
     return tk.Frame(parent, bg=BORDER, height=1)
+
+#---A. EXPLORADOR DE ARCHIVOS---
+class FileExplorer:
+    def __init__(self):
+        self.cwd = os.path.expanduser("~")
+        self.win = make_window("Explorador de Archivos", 700, 520)
+        self._build()
+
+    def _build(self):
+        w = self.win
+
+        # Barra de ruta
+        top = tk.Frame(w, bg=BG2, pady=8, padx=10)
+        top.pack(fill="x")
+        label(top, "Ruta:", bg=BG2, fg=TEXT_DIM).pack(side="left")
+        self.path_var = tk.StringVar(value=self.cwd)
+        self.path_entry = tk.Entry(
+            top, textvariable=self.path_var, bg=BG3, fg=TEXT,
+            insertbackground=ACCENT, relief="flat", font=FONT_MONO,
+            width=50
+        )
+        self.path_entry.pack(side="left", padx=8, fill="x", expand=True)
+        self.path_entry.bind("<Return>", lambda e: self._navigate_to(self.path_var.get()))
+
+        separator(w).pack(fill="x")
+
+        # Botones de acción
+        btn_bar = tk.Frame(w, bg=BG, pady=6, padx=10)
+        btn_bar.pack(fill="x")
+        styled_button(btn_bar, "Subir nivel", self._go_up, color=BG3, fg=TEXT).pack(side="left", padx=4)
+        styled_button(btn_bar, "Refrescar",   self._refresh,  color=BG3, fg=TEXT).pack(side="left", padx=4)
+        self.count_lbl = label(btn_bar, "", fg=TEXT_DIM)
+        self.count_lbl.pack(side="right", padx=8)
+
+        separator(w).pack(fill="x")
+
+        # Lista de archivos
+        list_frame = tk.Frame(w, bg=BG)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        cols = ("icon", "nombre", "tipo", "tamaño")
+        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", selectmode="browse")
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview",
+                         background=BG2, foreground=TEXT,
+                         fieldbackground=BG2, rowheight=24,
+                         font=FONT_UI)
+        style.configure("Treeview.Heading",
+                         background=BG3, foreground=ACCENT,
+                         font=(FONT_UI[0], FONT_UI[1], "bold"))
+        style.map("Treeview", background=[("selected", BG3)], foreground=[("selected", ACCENT)])
+
+        self.tree.heading("icon",   text="")
+        self.tree.heading("nombre", text="Nombre")
+        self.tree.heading("tipo",   text="Tipo")
+        self.tree.heading("tamaño", text="Tamaño")
+        self.tree.column("icon",   width=28,  stretch=False, anchor="center")
+        self.tree.column("nombre", width=300, stretch=True)
+        self.tree.column("tipo",   width=100, stretch=False, anchor="center")
+        self.tree.column("tamaño", width=90,  stretch=False, anchor="e")
+
+        sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        self.tree.bind("<Double-1>", self._on_double_click)
+
+        # Mensaje vacío
+        self.empty_lbl = label(w, "Esta carpeta esta vacia.", fg=TEXT_DIM, font=(FONT_UI[0], 11, "italic"))
+
+        self._refresh()
+
+    def _refresh(self):
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        self.empty_lbl.pack_forget()
+
+        try:
+            entries = sorted(os.scandir(self.cwd), key=lambda e: (not e.is_dir(), e.name.lower()))
+        except PermissionError:
+            messagebox.showerror("Permiso denegado", f"No se puede acceder a:\n{self.cwd}")
+            return
+
+        self.path_var.set(self.cwd)
+
+        if not entries:
+            self.empty_lbl.pack(pady=20)
+            self.count_lbl.config(text="0 elementos")
+            return
+
+        self.count_lbl.config(text=f"{len(entries)} elementos")
+        for e in entries:
+            if e.is_dir():
+                icon, tipo, size = "[DIR]", "Carpeta", "—"
+            else:
+                icon = "[FILE]"
+                ext  = os.path.splitext(e.name)[1].upper() or "Archivo"
+                tipo = ext
+                try:
+                    size = self._fmt_size(e.stat().st_size)
+                except OSError:
+                    size = "?"
+            self.tree.insert("", "end", values=(icon, e.name, tipo, size))
+
+    def _on_double_click(self, event):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        vals = self.tree.item(sel[0], "values")
+        name = vals[1]
+        path = os.path.join(self.cwd, name)
+        if os.path.isdir(path):
+            self._navigate_to(path)
+
+    def _navigate_to(self, path):
+        if os.path.isdir(path):
+            self.cwd = path
+            self._refresh()
+
+    def _go_up(self):
+        parent = os.path.dirname(self.cwd)
+        if parent != self.cwd:
+            self._navigate_to(parent)
+
+    @staticmethod
+    def _fmt_size(n: int) -> str:
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if n < 1024:
+                return f"{n:.1f} {unit}"
+            n /= 1024
+        return f"{n:.1f} PB"
