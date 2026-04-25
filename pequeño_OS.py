@@ -321,3 +321,117 @@ class ProcessManager:
         except psutil.AccessDenied:
             self.status_lbl.config(text="Acceso denegado.", fg=DANGER)
         self._refresh()
+
+#---C. SHELL EDUCATIVA---
+
+ALLOWED = {"ls", "dir", "pwd", "echo", "whoami", "date", "hostname", "uname"}
+
+class EduShell:
+    def __init__(self):
+        self.win = make_window("Shell Educativa", 680, 500)
+        self.cwd = os.path.expanduser("~")
+        self._build()
+
+    def _build(self):
+        w = self.win
+
+        # Info
+        info = tk.Frame(w, bg=BG2, pady=6, padx=12)
+        info.pack(fill="x")
+        cmds = "  ".join(f"[{c}]" for c in sorted(ALLOWED))
+        label(info, f"Comandos permitidos: {cmds}", bg=BG2, fg=TEXT_DIM, font=(FONT_UI[0], 9)).pack(side="left")
+
+        separator(w).pack(fill="x")
+
+        # Área de salida
+        out_frame = tk.Frame(w, bg=BG)
+        out_frame.pack(fill="both", expand=True, padx=10, pady=(10, 4))
+
+        self.output = tk.Text(
+            out_frame, bg=BG2, fg=TEXT, insertbackground=ACCENT,
+            relief="flat", font=FONT_MONO, state="disabled",
+            wrap="word", selectbackground=BG3
+        )
+        sb = ttk.Scrollbar(out_frame, orient="vertical", command=self.output.yview)
+        self.output.configure(yscrollcommand=sb.set)
+        self.output.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        # Tag para colorear
+        self.output.tag_config("prompt",  foreground=ACCENT2)
+        self.output.tag_config("output",  foreground=TEXT)
+        self.output.tag_config("error",   foreground=DANGER)
+        self.output.tag_config("info",    foreground=TEXT_DIM)
+
+        # Entrada de comando
+        inp_frame = tk.Frame(w, bg=BG3, pady=6, padx=10)
+        inp_frame.pack(fill="x")
+        label(inp_frame, "$", bg=BG3, fg=ACCENT2, font=FONT_MONO).pack(side="left", padx=(0, 6))
+        self.cmd_var = tk.StringVar()
+        self.entry = tk.Entry(inp_frame, textvariable=self.cmd_var, bg=BG3, fg=TEXT,
+                              insertbackground=ACCENT, relief="flat", font=FONT_MONO)
+        self.entry.pack(side="left", fill="x", expand=True)
+        self.entry.bind("<Return>", lambda e: self._run())
+        styled_button(inp_frame, "Ejecutar ▶", self._run, color=ACCENT, fg=BG).pack(side="right", padx=6)
+
+        self._print("Shell Educativa lista. Escribe un comando y presiona Enter.\n", "info")
+
+    def _print(self, text, tag="output"):
+        self.output.configure(state="normal")
+        self.output.insert("end", text, tag)
+        self.output.see("end")
+        self.output.configure(state="disabled")
+
+    def _run(self):
+        raw = self.cmd_var.get().strip()
+        if not raw:
+            return
+        self.cmd_var.set("")
+        self._print(f"\n$ {raw}\n", "prompt")
+
+        parts = raw.split()
+        base  = parts[0].lower()
+
+        if base not in ALLOWED:
+            self._print(
+                f"AVISO: Comando '{base}' no permitido.\n"
+                f"   Usa: {', '.join(sorted(ALLOWED))}\n", "error"
+            )
+            return
+
+        # Emulación interna de algunos comandos (independiente del OS)
+        if base == "pwd":
+            self._print(self.cwd + "\n")
+            return
+        if base == "echo":
+            self._print(" ".join(parts[1:]) + "\n")
+            return
+
+        # Ejecución real
+        try:
+            result = subprocess.run(
+                parts, capture_output=True, text=True, cwd=self.cwd, timeout=10
+            )
+            out = result.stdout or ""
+            err = result.stderr or ""
+            if out:
+                self._print(out)
+            if err:
+                self._print(err, "error")
+            if not out and not err:
+                self._print("(sin salida)\n", "info")
+        except FileNotFoundError:
+            # Fallback para dir/ls en sistemas que no los tienen como binarios
+            if base in ("ls", "dir"):
+                try:
+                    entries = sorted(os.listdir(self.cwd))
+                    self._print("\n".join(entries) + "\n")
+                except Exception as ex:
+                    self._print(str(ex) + "\n", "error")
+            else:
+                self._print(f"No se encontró el comando: {base}\n", "error")
+        except subprocess.TimeoutExpired:
+            self._print("Tiempo de espera agotado.\n", "error")
+        except Exception as ex:
+            self._print(str(ex) + "\n", "error")
+
