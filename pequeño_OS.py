@@ -613,3 +613,15 @@ class MiniOS:
     def run(self):
         self.root.mainloop()
 
+# ejecucion
+
+if __name__ == "__main__":
+    # Verificar dependencias
+    try:
+        import psutil
+    except ImportError:
+        import subprocess, sys
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "psutil", "--quiet"])
+        import psutil
+
+    MiniOS().run()
