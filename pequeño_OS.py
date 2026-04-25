@@ -210,3 +210,114 @@ class FileExplorer:
                 return f"{n:.1f} {unit}"
             n /= 1024
         return f"{n:.1f} PB"
+
+#---B. GESTION DE PROCESOS---
+
+class ProcessManager:
+    def __init__(self):
+        self.win = make_window("Gestion de Procesos", 750, 540)
+        self._build()
+
+    def _build(self):
+        w = self.win
+
+        # Cabecera
+        hdr = tk.Frame(w, bg=BG2, pady=8, padx=12)
+        hdr.pack(fill="x")
+        label(hdr, "Filtrar por nombre:", bg=BG2, fg=TEXT_DIM).pack(side="left")
+        self.filter_var = tk.StringVar()
+        self.filter_var.trace_add("write", lambda *_: self._refresh())
+        flt = tk.Entry(hdr, textvariable=self.filter_var, bg=BG3, fg=TEXT,
+                       insertbackground=ACCENT, relief="flat", font=FONT_MONO, width=25)
+        flt.pack(side="left", padx=8)
+        styled_button(hdr, "Actualizar", self._refresh, color=BG3, fg=TEXT).pack(side="left", padx=4)
+        self.count_lbl = label(hdr, "", fg=TEXT_DIM, bg=BG2)
+        self.count_lbl.pack(side="right", padx=8)
+
+        separator(w).pack(fill="x")
+
+        # Tabla
+        tbl_frame = tk.Frame(w, bg=BG)
+        tbl_frame.pack(fill="both", expand=True, padx=10, pady=8)
+
+        cols = ("pid", "nombre", "estado", "cpu%", "mem_mb")
+        self.tree = ttk.Treeview(tbl_frame, columns=cols, show="headings", selectmode="browse")
+        style = ttk.Style()
+        style.configure("Treeview", background=BG2, foreground=TEXT,
+                         fieldbackground=BG2, rowheight=22, font=FONT_UI)
+        style.configure("Treeview.Heading", background=BG3, foreground=ACCENT,
+                         font=(FONT_UI[0], FONT_UI[1], "bold"))
+        style.map("Treeview", background=[("selected", "#1c2a3a")], foreground=[("selected", ACCENT)])
+
+        hdrs = [("pid", "PID", 70), ("nombre", "Proceso", 280),
+                ("estado", "Estado", 90), ("cpu%", "CPU %", 70), ("mem_mb", "Mem (MB)", 80)]
+        for col, txt, w_ in hdrs:
+            self.tree.heading(col, text=txt, command=lambda c=col: self._sort(c))
+            self.tree.column(col, width=w_, stretch=(col == "nombre"), anchor="w" if col == "nombre" else "center")
+
+        sb = ttk.Scrollbar(tbl_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        # Botón terminar
+        bot = tk.Frame(w, bg=BG, pady=8, padx=10)
+        bot.pack(fill="x")
+        styled_button(bot, "Terminar proceso seleccionado", self._kill_process, color=DANGER, fg="white").pack(side="left")
+        self.status_lbl = label(bot, "", fg=TEXT_DIM)
+        self.status_lbl.pack(side="left", padx=12)
+
+        self._sort_col = "pid"
+        self._sort_rev = False
+        self._procs = []
+        self._refresh()
+
+    def _refresh(self):
+        flt = self.filter_var.get().lower()
+        self._procs = []
+        for p in psutil.process_iter(["pid", "name", "status", "cpu_percent", "memory_info"]):
+            try:
+                info = p.info
+                if flt and flt not in info["name"].lower():
+                    continue
+                mem = round(info["memory_info"].rss / 1024 / 1024, 1) if info["memory_info"] else 0
+                self._procs.append((info["pid"], info["name"], info["status"],
+                                    info["cpu_percent"], mem))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        self._procs.sort(key=lambda r: r[["pid","nombre","estado","cpu%","mem_mb"].index(self._sort_col)],
+                         reverse=self._sort_rev)
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for p in self._procs:
+            self.tree.insert("", "end", values=p)
+        self.count_lbl.config(text=f"{len(self._procs)} procesos")
+
+    def _sort(self, col):
+        cols = ["pid", "nombre", "estado", "cpu%", "mem_mb"]
+        if self._sort_col == col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col = col
+            self._sort_rev = False
+        self._refresh()
+
+    def _kill_process(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Selección requerida", "Selecciona un proceso primero.")
+            return
+        pid = int(self.tree.item(sel[0], "values")[0])
+        name = self.tree.item(sel[0], "values")[1]
+        if not messagebox.askyesno("Confirmar", f"¿Terminar el proceso '{name}' (PID {pid})?"):
+            return
+        try:
+            proc = psutil.Process(pid)
+            proc.terminate()
+            self.status_lbl.config(text=f"OK  Proceso {pid} terminado.", fg=ACCENT2)
+        except psutil.NoSuchProcess:
+            self.status_lbl.config(text="Proceso ya no existe.", fg=WARNING)
+        except psutil.AccessDenied:
+            self.status_lbl.config(text="Acceso denegado.", fg=DANGER)
+        self._refresh()
