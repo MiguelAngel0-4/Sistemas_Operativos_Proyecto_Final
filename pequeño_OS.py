@@ -47,3 +47,14 @@ def make_window(title: str, width: int = 700, height: int = 500) -> tk.Toplevel:
     win.geometry(f"{width}x{height}+{x}+{y}")
     return win
 
+def styled_button(parent, text, command, color=ACCENT, fg=BG, **kw):
+    btn = tk.Button(
+        parent, text=text, command=command,
+        bg=color, fg=fg, activebackground=color,
+        activeforeground=fg, relief="flat", cursor="hand2",
+        font=FONT_UI, padx=14, pady=6, bd=0, **kw
+    )
+    btn.bind("<Enter>", lambda e: btn.config(bg=_lighten(color)))
+    btn.bind("<Leave>", lambda e: btn.config(bg=color))
+    return btn
+
