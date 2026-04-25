@@ -521,3 +521,95 @@ class SysInfo:
             "ram_used":   fmt(ram.used),
         }
     
+# DISEÑO VENTANA PRINCIPAL
+
+class MiniOS:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Mini Sistema Operativo")
+        self.root.configure(bg=BG)
+        self.root.geometry("560x480")
+        self.root.resizable(False, False)
+        self._center()
+        self._build()
+
+    def _center(self):
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth()  - 560) // 2
+        y = (self.root.winfo_screenheight() - 480) // 2
+        self.root.geometry(f"560x480+{x}+{y}")
+
+    def _build(self):
+        r = self.root
+
+        # ── Cabecera ──
+        hdr = tk.Frame(r, bg=BG2, pady=18)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="Mini Sistema Operativo",
+                 bg=BG2, fg=ACCENT, font=(FONT_H1[0], 18, "bold")).pack()
+        tk.Label(hdr, text="Selecciona un módulo para comenzar",
+                 bg=BG2, fg=TEXT_DIM, font=(FONT_UI[0], 9)).pack(pady=(2, 0))
+
+        separator(r).pack(fill="x")
+
+        # ── Módulos ──
+        body = tk.Frame(r, bg=BG, pady=20)
+        body.pack(fill="both", expand=True, padx=40)
+
+        modules = [
+            ("Explorador de Archivos",
+             "Carpetas y archivos del sistema",
+             FileExplorer, ACCENT),
+            ("Gestion de Procesos",
+             "Visualiza y termina procesos activos",
+             ProcessManager, WARNING),
+            ("Shell Educativa",
+             "Ejecuta comandos básicos de terminal",
+             EduShell, ACCENT2),
+            ("Informacion del Sistema",
+             "Datos del SO, usuario, disco y RAM",
+             SysInfo, "#a5d6ff"),
+        ]
+
+        for title, desc, cls, color in modules:
+            card = tk.Frame(body, bg=BG2, cursor="hand2", relief="flat")
+            card.pack(fill="x", pady=6)
+
+            inner = tk.Frame(card, bg=BG2)
+            inner.pack(fill="x", padx=14, pady=10)
+
+            left = tk.Frame(inner, bg=BG2)
+            left.pack(side="left", fill="both", expand=True)
+            tk.Label(left, text=title, bg=BG2, fg=color,
+                     font=FONT_H2, anchor="w").pack(anchor="w")
+            tk.Label(left, text=desc, bg=BG2, fg=TEXT_DIM,
+                     font=(FONT_UI[0], 9), anchor="w").pack(anchor="w", pady=(2, 0))
+
+            arrow = tk.Label(inner, text="›", bg=BG2, fg=TEXT_DIM,
+                             font=(FONT_UI[0], 20))
+            arrow.pack(side="right", padx=4)
+
+            def _make_open(c):
+                def _open(_):
+                    c()
+                return _open
+
+            for widget in (card, inner, left, arrow):
+                widget.bind("<Button-1>", _make_open(cls))
+                widget.bind("<Enter>", lambda e, c=card: c.config(bg=BG3) or [
+                    w.config(bg=BG3) for w in c.winfo_children() + sum(
+                        [list(ch.winfo_children()) for ch in c.winfo_children()], [])])
+                widget.bind("<Leave>", lambda e, c=card: c.config(bg=BG2) or [
+                    w.config(bg=BG2) for w in c.winfo_children() + sum(
+                        [list(ch.winfo_children()) for ch in c.winfo_children()], [])])
+
+        # ── Pie ──
+        separator(r).pack(fill="x")
+        foot = tk.Frame(r, bg=BG2, pady=6)
+        foot.pack(fill="x")
+        tk.Label(foot, text=f"Python {platform.python_version()}  •  psutil  •  Tkinter",
+                 bg=BG2, fg=TEXT_DIM, font=(FONT_UI[0], 8)).pack()
+
+    def run(self):
+        self.root.mainloop()
+
