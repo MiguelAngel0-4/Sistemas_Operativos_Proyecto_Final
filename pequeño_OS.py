@@ -435,3 +435,89 @@ class EduShell:
         except Exception as ex:
             self._print(str(ex) + "\n", "error")
 
+# D. INFORMACION DEL SISTEMA
+
+class SysInfo:
+    def __init__(self):
+        self.win = make_window("Informacion del Sistema", 600, 480)
+        self._build()
+
+    def _build(self):
+        w = self.win
+        w.configure(bg=BG)
+
+        canvas = tk.Canvas(w, bg=BG, highlightthickness=0)
+        canvas.pack(fill="both", expand=True, padx=20, pady=20)
+
+        self._sections(canvas)
+
+    def _sections(self, parent):
+        info = self._collect()
+
+        frame = tk.Frame(parent, bg=BG)
+        frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        label(frame, "Informacion del Sistema", font=FONT_H1, fg=ACCENT).pack(pady=(10, 4))
+        separator(frame).pack(fill="x", pady=6)
+
+        groups = [
+            ("Usuario", [
+                ("Usuario actual",   info["user"]),
+                ("Directorio home",  info["home"]),
+            ]),
+            ("Sistema Operativo", [
+                ("Sistema",          info["os"]),
+                ("Versión",          info["os_version"]),
+                ("Arquitectura",     info["arch"]),
+                ("Procesador",       info["cpu"]),
+                ("Núcleos lógicos",  info["cores"]),
+            ]),
+            ("Almacenamiento", [
+                ("Disco total",      info["disk_total"]),
+                ("Disco usado",      info["disk_used"]),
+                ("Disco disponible", info["disk_free"]),
+                ("Uso de disco",     info["disk_pct"]),
+            ]),
+            ("Memoria RAM", [
+                ("RAM total",        info["ram_total"]),
+                ("RAM disponible",   info["ram_avail"]),
+                ("RAM usada",        info["ram_used"]),
+            ]),
+        ]
+
+        for title, rows in groups:
+            grp = tk.Frame(frame, bg=BG2, bd=0, relief="flat")
+            grp.pack(fill="x", padx=10, pady=4)
+            label(grp, title, bg=BG2, fg=ACCENT, font=FONT_H2).pack(anchor="w", padx=12, pady=(6, 2))
+            for key, val in rows:
+                row = tk.Frame(grp, bg=BG2)
+                row.pack(fill="x", padx=16, pady=1)
+                label(row, f"{key}:", bg=BG2, fg=TEXT_DIM, width=20, anchor="w").pack(side="left")
+                label(row, val,       bg=BG2, fg=TEXT,     anchor="w").pack(side="left")
+            tk.Frame(grp, bg=BG2, height=4).pack()
+
+    @staticmethod
+    def _collect() -> dict:
+        uname = platform.uname()
+        disk  = shutil.disk_usage("/")
+        ram   = psutil.virtual_memory()
+
+        def fmt(n): return f"{n / 1024**3:.2f} GB"
+
+        return {
+            "user":       getpass.getuser(),
+            "home":       os.path.expanduser("~"),
+            "os":         f"{uname.system} ({platform.platform(terse=True)})",
+            "os_version": uname.version[:60] + ("…" if len(uname.version) > 60 else ""),
+            "arch":       uname.machine,
+            "cpu":        uname.processor or platform.processor() or "N/D",
+            "cores":      str(psutil.cpu_count(logical=True)),
+            "disk_total": fmt(disk.total),
+            "disk_used":  fmt(disk.used),
+            "disk_free":  fmt(disk.free),
+            "disk_pct":   f"{disk.used / disk.total * 100:.1f} %",
+            "ram_total":  fmt(ram.total),
+            "ram_avail":  fmt(ram.available),
+            "ram_used":   fmt(ram.used),
+        }
+    
